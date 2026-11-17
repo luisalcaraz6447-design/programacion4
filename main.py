@@ -1,170 +1,282 @@
 """
-Título: Proyecto Tiendita
+Título: Aura Tech Store - API Full-Stack con Persistencia CSV y Analítica
 Autor: Diego Ayala
-Fecha de creación: 07/10/2026
-Descripción: Configuración de la API para gestión de inventario
+Descripción: Gestión de inventario, registro de ventas en CSV y métricas con Pandas.
 """
 
+import asyncio
+import csv
+import os
+from datetime import datetime
+import pandas as pd
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-import asyncio
 from pydantic import BaseModel, Field
 
-
-
-app = FastAPI(title="API Proyecto Tiendita", version="1.0.0")
+app = FastAPI(title="API Aura Tech Store", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
 )
 
-#Inicializamos variable lock (Condición de carrera)
 lock = asyncio.Lock()
 
+ARCHIVO_PRODUCTOS = "productos.csv"
+ARCHIVO_VENTAS = "ventas.csv"
+CAMPOS_PRODUCTOS = ["id", "nombre", "precio", "cantidad"]
+CAMPOS_VENTAS = ["fecha", "producto", "precio", "cantidad", "total"]
 
-#Modelos de Pydantic
-#Pedir al cliente que su petición debe estructurarse de esta manera.
-class crearProducto(BaseModel):
+
+# Modelos de Pydantic
+class CrearProducto(BaseModel):
     nombre: str = Field(..., min_length=1, description="Nombre del producto")
     precio: float = Field(..., gt=0, description="Precio del producto")
-    cantidad: int = Field(..., ge=0, description="stock del producto")
+    cantidad: int = Field(..., ge=0, description="Stock disponible")
 
 
-#La salida de datos de la API debe de estructurarse de esta manera.
-class respuestaProducto(BaseModel):
+class RespuestaProducto(BaseModel):
     id: int
     nombre: str
     precio: float
     cantidad: int
 
 
-#Datos cargados (Simulación)
-inventario = [
-    {"id": 1, "nombre": "Coca-Cola", "precio": 20, "cantidad": 25},
-    {"id": 2, "nombre": "Papas", "precio": 15, "cantidad": 40},
-    {"id": 3, "nombre": "Café", "precio": 18, "cantidad": 1}
-]
+# Funciones auxiliares de persistencia CSV
+def inicializar_archivos():
+    if not os.path.exists(ARCHIVO_PRODUCTOS):
+        with open(ARCHIVO_PRODUCTOS, mode="w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=CAMPOS_PRODUCTOS)
+            writer.writeheader()
+
+    if not os.path.exists(ARCHIVO_VENTAS):
+        with open(ARCHIVO_VENTAS, mode="w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=CAMPOS_VENTAS)
+            writer.writeheader()
 
 
-#Prueba asyncio 5 segundos
-@app.get("/prueba-asyncio")
-async def pruebaAsyncio():
-    try:
-        print("empiezan los 5 segundos")
-        await asyncio.sleep(5)
-        print("Se acaba de terminar los 5 segundos")
-        return {"Message": "Respuesta después de 5 segundos"}
-    except Exception as error:
-        print(f"Hubo un error: {error}")
-
-#Prueba asyncio 3 segundos
-@app.get("/prueba-asyncio-3segundos")
-async def pruebaAsyncio():
-    print("empiezan los 3 segundos")
-    await asyncio.sleep(3)
-    print("Se acaba de terminar los 3 segundos")
-    return {"Message": "Respuesta después de 3 segundos"}
-
-#Prueba asyncio 1 segundos
-@app.get("/prueba-asyncio-1segundo")
-async def pruebaAsyncio():
-    print("empiezan los 1 segundos")
-    await asyncio.sleep(1)
-    print("Se acaba de terminar los 1 segundos")
-    return {"Message": "Respuesta después de 1 segundos"}
+def leer_productos() -> list[dict]:
+    inicializar_archivos()
+    productos = []
+    with open(ARCHIVO_PRODUCTOS, mode="r", newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for fila in reader:
+            productos.append({
+                "id": int(fila["id"]),
+                "nombre": fila["nombre"],
+                "precio": float(fila["precio"]),
+                "cantidad": int(fila["cantidad"]),
+            })
+    return productos
 
 
-#Ejemplo de API - GET para obtener mensaje inicial
+def guardar_productos(productos: list[dict]):
+    with open(ARCHIVO_PRODUCTOS, mode="w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=CAMPOS_PRODUCTOS)
+        writer.writeheader()
+        writer.writerows(productos)
+
+
+def registrar_venta(producto: str, precio: float, cantidad: int):
+    inicializar_archivos()
+    fecha_actual = datetime.now().strftime("%Y-%m-%d")
+    total = round(precio * cantidad, 2)
+    with open(ARCHIVO_VENTAS, mode="a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=CAMPOS_VENTAS)
+        writer.writerow({
+            "fecha": fecha_actual,
+            "producto": producto,
+            "precio": precio,
+            "cantidad": cantidad,
+            "total": total,
+        })
+
+
+@app.on_event("startup")
+def startup_event():
+    inicializar_archivos()
+
+
 @app.get("/")
 def home():
+    return {"message": "API de Aura Tech Store operativa con persistencia CSV"}
+
+
+# ==========================================
+# ENDPOINTS CRUD CON PERSISTENCIA EN CSV
+# ==========================================
+
+@app.get("/productos", response_model=list[RespuestaProducto])
+def get_productos():
     try:
-        print("hola1") 
-        resultado = "1"  +  1,
-        print("hola2")
-        return {"Message": "Hola bienvenido"}
-    except Exception as error:
-        raise HTTPException(
-            status_code = status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error al hacer la operación: {str(error)}"
-        )
-       
-   
-
-
-#GET Obtiene lista de productos de mi inventario
-@app.get("/productos")
-def getProductos():
-    try:
-        return inventario
-    except Exception as error:
-        return  {str(error)} 
-
-#POST Agrega producto a mi inventario
-@app.post("/productos", response_model=respuestaProducto, status_code=status.HTTP_201_CREATED)
-def addProducto(producto: crearProducto):
-    try:
-
-        nuevo_id = max((p["id"] for p in inventario), default=0) + 1
-        nuevo_producto = {
-            "id": nuevo_id,    
-            "nombre": producto.nombre,
-            "precio": producto.precio,
-            "cantidad": producto.cantidad
-        }
-
-        inventario.append(nuevo_producto)
-
-        return nuevo_producto
+        return leer_productos()
     except Exception as error:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error al agregar el producto: {str(error)}"
+            detail=f"Error al leer el inventario: {str(error)}",
         )
 
-    
-#DELETE Borra producto de mi inventario
-@app.delete("/productos/{producto_id}")
-def deleteProducto(producto_id: int):
-    try:
-        for producto in inventario:
-            if producto["id"] == producto_id:
-                inventario.remove(producto) #Elimina el producto del inventario ya que encontró el id correspondiente
-                return {"Message": "El producto fue eliminado"}
-        return {"Message": "No fue encontrado el producto"}
-    except HTTPException as errorHTTP:
-        return {str(errorHTTP)}
 
+@app.post("/productos", response_model=RespuestaProducto, status_code=status.HTTP_201_CREATED)
+async def add_producto(producto: CrearProducto):
+    try:
+        async with lock:
+            productos = leer_productos()
+            nuevo_id = max((p["id"] for p in productos), default=0) + 1
+            nuevo_producto = {
+                "id": nuevo_id,
+                "nombre": producto.nombre.strip(),
+                "precio": round(producto.precio, 2),
+                "cantidad": producto.cantidad,
+            }
+            productos.append(nuevo_producto)
+            guardar_productos(productos)
+            return nuevo_producto
     except Exception as error:
-        return  {str(error)} 
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al agregar el producto: {str(error)}",
+        )
 
 
 @app.post("/productos/{producto_id}")
-async def comprarProducto(producto_id: int):
+async def comprar_producto(producto_id: int):
     try:
         async with lock:
-            for objeto in inventario:
-                if objeto["id"] == producto_id:
-                    if objeto["cantidad"] > 0:
-                        await asyncio.sleep(0.05)
-                        objeto["cantidad"] = objeto["cantidad"]-1
-                        return {"Mensaje":"Producto comprado"}
+            productos = leer_productos()
+            for item in productos:
+                if item["id"] == producto_id:
+                    if item["cantidad"] > 0:
+                        item["cantidad"] -= 1
+                        guardar_productos(productos)
+                        registrar_venta(item["nombre"], item["precio"], 1)
+                        return {
+                            "mensaje": f"Compra registrada: {item['nombre']}",
+                            "stock_restante": item["cantidad"],
+                        }
                     else:
                         raise HTTPException(
-                            status_code = status.HTTP_400_BAD_REQUEST,
-                            detail = "No hay stock de ese producto"
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="No hay stock disponible de este producto",
                         )
 
             raise HTTPException(
-                status_code = status.HTTP_400_BAD_REQUEST,
-                detail = "No existe el ID de ese producto"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No existe el ID de ese producto",
             )
-
+    except HTTPException:
+        raise
     except Exception as error:
-        raise HTTPException (
-            status_code = status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail = f"Error al comprar producto: {str(error)}"
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al procesar la compra: {str(error)}",
+        )
+
+
+@app.delete("/productos/{producto_id}")
+async def delete_producto(producto_id: int):
+    try:
+        async with lock:
+            productos = leer_productos()
+            productos_filtrados = [p for p in productos if p["id"] != producto_id]
+
+            if len(productos_filtrados) == len(productos):
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Producto no encontrado para eliminar",
+                )
+
+            guardar_productos(productos_filtrados)
+            return {"mensaje": "Producto eliminado correctamente del archivo CSV"}
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al eliminar el producto: {str(error)}",
+        )
+
+
+# ==========================================
+# ENDPOINTS ANALÍTICOS CON PANDAS
+# ==========================================
+
+@app.get("/analitica/kpis")
+def obtener_kpis():
+    inicializar_archivos()
+    try:
+        df = pd.read_csv(ARCHIVO_VENTAS)
+        if df.empty:
+            return {
+                "ingresos_totales": 0.0,
+                "total_transacciones": 0,
+                "unidades_vendidas": 0,
+                "ticket_promedio": 0.0,
+                "producto_estrella": "Sin ventas aún",
+            }
+
+        ingresos_totales = float(df["total"].sum())
+        total_transacciones = int(len(df))
+        unidades_vendidas = int(df["cantidad"].sum())
+        ticket_promedio = float(df["total"].mean())
+
+        agrupado_producto = df.groupby("producto")["cantidad"].sum()
+        producto_estrella = str(agrupado_producto.idxmax())
+
+        return {
+            "ingresos_totales": round(ingresos_totales, 2),
+            "total_transacciones": total_transacciones,
+            "unidades_vendidas": unidades_vendidas,
+            "ticket_promedio": round(ticket_promedio, 2),
+            "producto_estrella": producto_estrella,
+        }
+    except Exception as error:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al calcular KPIs: {str(error)}",
+        )
+
+
+@app.get("/analitica/ventas-producto")
+def ventas_por_producto():
+    inicializar_archivos()
+    try:
+        df = pd.read_csv(ARCHIVO_VENTAS)
+        if df.empty:
+            return []
+
+        resumen = (
+            df.groupby("producto", as_index=False)
+            .agg(unidades=("cantidad", "sum"), ingresos=("total", "sum"))
+            .sort_values(by="ingresos", ascending=False)
+        )
+        return resumen.to_dict(orient="records")
+    except Exception as error:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al agrupar ventas por producto: {str(error)}",
+        )
+
+
+@app.get("/analitica/ventas-fecha")
+def ventas_por_fecha():
+    inicializar_archivos()
+    try:
+        df = pd.read_csv(ARCHIVO_VENTAS)
+        if df.empty:
+            return []
+
+        evolucion = (
+            df.groupby("fecha", as_index=False)
+            .agg(ingresos=("total", "sum"), transacciones=("cantidad", "count"))
+            .sort_values(by="fecha", ascending=True)
+        )
+        return evolucion.to_dict(orient="records")
+    except Exception as error:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al agrupar ventas por fecha: {str(error)}",
         )

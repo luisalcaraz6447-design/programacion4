@@ -1,75 +1,270 @@
-<html>
-    <head>
-        <title>Tiendita</title>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    </head>
-    <body class="bg-light mt-5">
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aura Tech Store | Inventario & Dashboard Analítico</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-main: #0f172a;
+            --bg-card: #1e293b;
+            --border-card: #334155;
+            --accent-primary: #38bdf8;
+            --accent-secondary: #818cf8;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
 
-        <div class="container">
-            <div class="row g-4">
-                
-                <!-- Formulario de Registro -->
-                <div class="col-md-4">
-                    <div class="card shadow-sm border-0">
-                        <div class="card-header bg-white font-weight-bold fw-bold">
-                            <i class="me-1 text-primary"></i> Registrar Producto
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+
+        .navbar-custom {
+            background: linear-gradient(90deg, #0f172a 0%, #1e1b4b 100%);
+            border-bottom: 1px solid var(--border-card);
+        }
+
+        .brand-gradient {
+            background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800;
+        }
+
+        .card-dark {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: 12px;
+            color: var(--text-main);
+        }
+
+        .card-header-dark {
+            background-color: rgba(15, 23, 42, 0.5);
+            border-bottom: 1px solid var(--border-card);
+            font-weight: 600;
+        }
+
+        .kpi-card {
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+
+        .kpi-card:hover {
+            transform: translateY(-3px);
+            border-color: var(--accent-primary);
+        }
+
+        .kpi-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+        }
+
+        .form-control-dark {
+            background-color: #0f172a;
+            border: 1px solid var(--border-card);
+            color: var(--text-main);
+        }
+
+        .form-control-dark:focus {
+            background-color: #0f172a;
+            border-color: var(--accent-primary);
+            color: var(--text-main);
+            box-shadow: 0 0 0 0.2rem rgba(56, 189, 248, 0.25);
+        }
+
+        .table-dark-custom {
+            --bs-table-bg: transparent;
+            --bs-table-color: var(--text-main);
+            --bs-table-border-color: var(--border-card);
+            --bs-table-hover-bg: rgba(56, 189, 248, 0.08);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 280px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Navbar -->
+    <nav class="navbar navbar-custom py-3 mb-4">
+        <div class="container d-flex justify-content-between align-items-center">
+            <span class="navbar-brand mb-0 h1 d-flex align-items-center gap-2 text-white">
+                <i class="bi bi-cpu-fill text-info"></i>
+                <span class="brand-gradient">AURA TECH STORE</span>
+            </span>
+            <span class="badge bg-info bg-opacity-10 text-info border border-info px-3 py-2">
+                <i class="bi bi-filetype-csv me-1"></i> Persistencia CSV + Pandas BI
+            </span>
+        </div>
+    </nav>
+
+    <div class="container pb-5">
+
+        <!-- Alerta de notificaciones -->
+        <div id="alertaContainer"></div>
+
+        <!-- Sección 1: Tarjetas KPI -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-3 col-sm-6">
+                <div class="card card-dark kpi-card p-3 h-100">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <p class="text-secondary small mb-1">Ingresos Totales</p>
+                            <h4 class="fw-bold mb-0 text-info" id="kpiIngresos">$0.00</h4>
                         </div>
-                        <div class="card-body">
-                            <form id="formProducto">
-                                <div class="mb-3">
-                                   
-                                    <label for="nombre" class="form-label">Nombre del Producto</label>
-                                    <input type="text" class="form-control" id="nombre" placeholder="Ej. Leche 1L" required>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="precio" class="form-label">Precio ($)</label>
-                                    <input type="number" step="0.5" class="form-control" id="precio" placeholder="25.00" required>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="cantidad" class="form-label">Cantidad Disponible</label>
-                                    <input type="number" class="form-control" id="cantidad" placeholder="10" required>
-                                </div>
-                                <button type="submit" class="btn btn-primary w-100">
-                                    <i class="bi bi-save me-1"></i> Guardar Producto
-                                </button>
-                            </form>
+                        <div class="kpi-icon bg-info bg-opacity-10 text-info">
+                            <i class="bi bi-currency-dollar"></i>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <!-- Tabla de Inventario -->
-                <div class="col-md-8">
-                    <div class="card shadow-sm border-0">
-                        <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
-                            <span><i class="me-1 text-primary"></i> Catálogo de Productos</span>
-                            <span class="badge bg-secondary" id="totalProductos">0 productos</span>
+            <div class="col-md-3 col-sm-6">
+                <div class="card card-dark kpi-card p-3 h-100">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <p class="text-secondary small mb-1">Producto Estrella</p>
+                            <h6 class="fw-bold mb-0 text-warning" id="kpiEstrella">-</h6>
                         </div>
-                        <div class="card-body p-0">
-                            <div class="table-responsive">
-                                <table class="table table-hover align-middle mb-0">
-                                    <thead class="table-light">
-                                        <tr>
-                                            <th>ID</th>
-                                            <th>Producto</th>
-                                            <th>Precio</th>
-                                            <th>Cantidad</th>
-                                            <th class="text-end me-3">Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="tablaProductos">
-                                        <!-- Las filas se cargan dinámicamente con JavaScript -->
-                                    </tbody>
-                                </table>
-                            </div>
+                        <div class="kpi-icon bg-warning bg-opacity-10 text-warning">
+                            <i class="bi bi-trophy-fill"></i>
                         </div>
                     </div>
                 </div>
+            </div>
 
+            <div class="col-md-3 col-sm-6">
+                <div class="card card-dark kpi-card p-3 h-100">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <p class="text-secondary small mb-1">Ventas Registradas</p>
+                            <h4 class="fw-bold mb-0 text-success" id="kpiTransacciones">0</h4>
+                        </div>
+                        <div class="kpi-icon bg-success bg-opacity-10 text-success">
+                            <i class="bi bi-bag-check-fill"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3 col-sm-6">
+                <div class="card card-dark kpi-card p-3 h-100">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <p class="text-secondary small mb-1">Ticket Promedio</p>
+                            <h4 class="fw-bold mb-0 text-primary" id="kpiTicket">$0.00</h4>
+                        </div>
+                        <div class="kpi-icon bg-primary bg-opacity-10 text-primary">
+                            <i class="bi bi-graph-up-arrow"></i>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- Bootstrap JS Bundle -->
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-        <script src="app.js"></script>
-    </body>
+        <!-- Sección 2: Gráficas con Chart.js -->
+        <div class="row g-4 mb-4">
+            <div class="col-lg-7">
+                <div class="card card-dark h-100">
+                    <div class="card-header card-header-dark d-flex justify-content-between align-items-center py-3">
+                        <span><i class="bi bi-bar-chart-fill text-info me-2"></i>Ingresos por Producto (MXN)</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="graficaProductos"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-5">
+                <div class="card card-dark h-100">
+                    <div class="card-header card-header-dark d-flex justify-content-between align-items-center py-3">
+                        <span><i class="bi bi-activity text-warning me-2"></i>Evolución de Ventas por Fecha</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="graficaFechas"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sección 3: Gestión de Inventario (Formulario + Tabla) -->
+        <div class="row g-4">
+            <!-- Formulario de Registro -->
+            <div class="col-lg-4">
+                <div class="card card-dark">
+                    <div class="card-header card-header-dark py-3">
+                        <i class="bi bi-plus-circle-fill text-info me-2"></i>Nuevo Componente / Gadget
+                    </div>
+                    <div class="card-body">
+                        <form id="formProducto">
+                            <div class="mb-3">
+                                <label for="nombre" class="form-label small text-secondary">Nombre del Artículo</label>
+                                <input type="text" class="form-control form-control-dark" id="nombre" placeholder="Ej. Tarjeta Gráfica RTX 4060" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="precio" class="form-label small text-secondary">Precio Unitario ($ MXN)</label>
+                                <input type="number" step="0.01" min="0.5" class="form-control form-control-dark" id="precio" placeholder="6500.00" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="cantidad" class="form-label small text-secondary">Stock Inicial</label>
+                                <input type="number" min="0" class="form-control form-control-dark" id="cantidad" placeholder="10" required>
+                            </div>
+                            <button type="submit" class="btn btn-info w-100 fw-semibold text-dark">
+                                <i class="bi bi-save2 me-1"></i> Guardar en Catálogo
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabla de Inventario -->
+            <div class="col-lg-8">
+                <div class="card card-dark">
+                    <div class="card-header card-header-dark py-3 d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-box-seam-fill text-info me-2"></i>Inventario en Tiempo Real</span>
+                        <span class="badge bg-info text-dark" id="totalProductos">0 productos</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-dark-custom table-hover align-middle mb-0">
+                                <thead>
+                                    <tr class="text-secondary small">
+                                        <th class="ps-3">ID</th>
+                                        <th>Producto</th>
+                                        <th>Precio</th>
+                                        <th>Stock</th>
+                                        <th class="text-end pe-3">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tablaProductos">
+                                    <!-- Filas cargadas dinámicamente -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="app.js"></script>
+</body>
 </html>
