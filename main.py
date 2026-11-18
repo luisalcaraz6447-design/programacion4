@@ -64,12 +64,13 @@ def leer_productos() -> list[dict]:
     with open(ARCHIVO_PRODUCTOS, mode="r", newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for fila in reader:
-            productos.append({
-                "id": int(fila["id"]),
-                "nombre": fila["nombre"],
-                "precio": float(fila["precio"]),
-                "cantidad": int(fila["cantidad"]),
-            })
+            if fila.get("id") and fila.get("nombre"):
+                productos.append({
+                    "id": int(fila["id"]),
+                    "nombre": fila["nombre"],
+                    "precio": float(fila["precio"]),
+                    "cantidad": int(fila["cantidad"]),
+                })
     return productos
 
 
@@ -82,9 +83,19 @@ def guardar_productos(productos: list[dict]):
 
 def registrar_venta(producto: str, precio: float, cantidad: int):
     inicializar_archivos()
+    necesita_salto = False
+    if os.path.getsize(ARCHIVO_VENTAS) > 0:
+        with open(ARCHIVO_VENTAS, mode="rb") as fb:
+            fb.seek(-1, os.SEEK_END)
+            if fb.read(1) != b"\n":
+                necesita_salto = True
+
     fecha_actual = datetime.now().strftime("%Y-%m-%d")
-    total = round(precio * cantidad, 2)
+    total = round(float(precio) * int(cantidad), 2)
+
     with open(ARCHIVO_VENTAS, mode="a", newline="", encoding="utf-8") as f:
+        if necesita_salto:
+            f.write("\n")
         writer = csv.DictWriter(f, fieldnames=CAMPOS_VENTAS)
         writer.writerow({
             "fecha": fecha_actual,
@@ -204,11 +215,22 @@ async def delete_producto(producto_id: int):
 # ENDPOINTS ANALÍTICOS CON PANDAS
 # ==========================================
 
+def leer_df_ventas_limpio() -> pd.DataFrame:
+    inicializar_archivos()
+    df = pd.read_csv(ARCHIVO_VENTAS, on_bad_lines="skip")
+    if df.empty:
+        return df
+    df["precio"] = pd.to_numeric(df["precio"], errors="coerce").fillna(0.0)
+    df["cantidad"] = pd.to_numeric(df["cantidad"], errors="coerce").fillna(0).astype(int)
+    df["total"] = pd.to_numeric(df["total"], errors="coerce").fillna(0.0)
+    df = df.dropna(subset=["fecha", "producto"])
+    return df
+
+
 @app.get("/analitica/kpis")
 def obtener_kpis():
-    inicializar_archivos()
     try:
-        df = pd.read_csv(ARCHIVO_VENTAS)
+        df = leer_df_ventas_limpio()
         if df.empty:
             return {
                 "ingresos_totales": 0.0,
@@ -221,10 +243,10 @@ def obtener_kpis():
         ingresos_totales = float(df["total"].sum())
         total_transacciones = int(len(df))
         unidades_vendidas = int(df["cantidad"].sum())
-        ticket_promedio = float(df["total"].mean())
+        ticket_promedio = float(df["total"].mean()) if total_transacciones > 0 else 0.0
 
         agrupado_producto = df.groupby("producto")["cantidad"].sum()
-        producto_estrella = str(agrupado_producto.idxmax())
+        producto_estrella = str(agrupado_producto.idxmax()) if not agrupado_producto.empty else "Sin ventas"
 
         return {
             "ingresos_totales": round(ingresos_totales, 2),
@@ -242,9 +264,8 @@ def obtener_kpis():
 
 @app.get("/analitica/ventas-producto")
 def ventas_por_producto():
-    inicializar_archivos()
     try:
-        df = pd.read_csv(ARCHIVO_VENTAS)
+        df = leer_df_ventas_limpio()
         if df.empty:
             return []
 
@@ -253,6 +274,7 @@ def ventas_por_producto():
             .agg(unidades=("cantidad", "sum"), ingresos=("total", "sum"))
             .sort_values(by="ingresos", ascending=False)
         )
+        resumen["ingresos"] = resumen["ingresos"].round(2)
         return resumen.to_dict(orient="records")
     except Exception as error:
         raise HTTPException(
@@ -263,9 +285,8 @@ def ventas_por_producto():
 
 @app.get("/analitica/ventas-fecha")
 def ventas_por_fecha():
-    inicializar_archivos()
     try:
-        df = pd.read_csv(ARCHIVO_VENTAS)
+        df = leer_df_ventas_limpio()
         if df.empty:
             return []
 
@@ -274,6 +295,7 @@ def ventas_por_fecha():
             .agg(ingresos=("total", "sum"), transacciones=("cantidad", "count"))
             .sort_values(by="fecha", ascending=True)
         )
+        evolucion["ingresos"] = evolucion["ingresos"].round(2)
         return evolucion.to_dict(orient="records")
     except Exception as error:
         raise HTTPException(

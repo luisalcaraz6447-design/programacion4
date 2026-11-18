@@ -10,6 +10,7 @@ const alertaContainer = document.getElementById("alertaContainer");
 // Instancias globales de Chart.js
 let chartProductos = null;
 let chartFechas = null;
+let actualizando = false;
 
 // Utilidad para formatear moneda
 function formatearMoneda(valor) {
@@ -130,7 +131,6 @@ async function comprarProducto(idProducto) {
 
         if (respuesta.ok) {
             mostrarAlerta(`${data.mensaje}. Stock restante: ${data.stock_restante}`, "info");
-            // Actualizar tabla, KPIs y gráficas en tiempo real
             await actualizarTodo();
         } else {
             mostrarAlerta(data.detail || "No se pudo realizar la compra.", "warning");
@@ -167,12 +167,17 @@ async function eliminarProducto(idProducto) {
 async function cargarKPIs() {
     try {
         const respuesta = await fetch(`${API_BASE}/analitica/kpis`);
+        if (!respuesta.ok) return;
         const kpis = await respuesta.json();
 
-        document.getElementById("kpiIngresos").textContent = formatearMoneda(kpis.ingresos_totales);
-        document.getElementById("kpiEstrella").textContent = kpis.producto_estrella;
-        document.getElementById("kpiTransacciones").textContent = kpis.total_transacciones;
-        document.getElementById("kpiTicket").textContent = formatearMoneda(kpis.ticket_promedio);
+        const ingresos = Number(kpis.ingresos_totales) || 0;
+        const ticket = Number(kpis.ticket_promedio) || 0;
+        const transacciones = Number(kpis.total_transacciones) || 0;
+
+        document.getElementById("kpiIngresos").textContent = formatearMoneda(ingresos);
+        document.getElementById("kpiEstrella").textContent = kpis.producto_estrella || "-";
+        document.getElementById("kpiTransacciones").textContent = transacciones;
+        document.getElementById("kpiTicket").textContent = formatearMoneda(ticket);
     } catch (error) {
         console.error("Error al cargar KPIs:", error);
     }
@@ -181,19 +186,25 @@ async function cargarKPIs() {
 async function renderizarGraficaProductos() {
     try {
         const respuesta = await fetch(`${API_BASE}/analitica/ventas-producto`);
+        if (!respuesta.ok) return;
         const datos = await respuesta.json();
 
         const etiquetas = datos.map((item) => item.producto);
-        const valoresIngresos = datos.map((item) => item.ingresos);
+        const valoresIngresos = datos.map((item) => Number(item.ingresos) || 0);
 
-        const ctx = document.getElementById("graficaProductos").getContext("2d");
+        const canvas = document.getElementById("graficaProductos");
+        if (!canvas) return;
 
-        // Destruir instancia previa antes de volver a dibujar
+        const existente = Chart.getChart(canvas);
+        if (existente) {
+            existente.destroy();
+        }
         if (chartProductos) {
             chartProductos.destroy();
+            chartProductos = null;
         }
 
-        chartProductos = new Chart(ctx, {
+        chartProductos = new Chart(canvas.getContext("2d"), {
             type: "bar",
             data: {
                 labels: etiquetas,
@@ -211,6 +222,7 @@ async function renderizarGraficaProductos() {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                animation: { duration: 250 },
                 plugins: {
                     legend: { labels: { color: "#f8fafc" } },
                 },
@@ -235,19 +247,25 @@ async function renderizarGraficaProductos() {
 async function renderizarGraficaFechas() {
     try {
         const respuesta = await fetch(`${API_BASE}/analitica/ventas-fecha`);
+        if (!respuesta.ok) return;
         const datos = await respuesta.json();
 
         const fechas = datos.map((item) => item.fecha);
-        const ingresos = datos.map((item) => item.ingresos);
+        const ingresos = datos.map((item) => Number(item.ingresos) || 0);
 
-        const ctx = document.getElementById("graficaFechas").getContext("2d");
+        const canvas = document.getElementById("graficaFechas");
+        if (!canvas) return;
 
-        // Destruir instancia previa antes de volver a dibujar
+        const existente = Chart.getChart(canvas);
+        if (existente) {
+            existente.destroy();
+        }
         if (chartFechas) {
             chartFechas.destroy();
+            chartFechas = null;
         }
 
-        chartFechas = new Chart(ctx, {
+        chartFechas = new Chart(canvas.getContext("2d"), {
             type: "line",
             data: {
                 labels: fechas,
@@ -268,6 +286,7 @@ async function renderizarGraficaFechas() {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                animation: { duration: 250 },
                 plugins: {
                     legend: { labels: { color: "#f8fafc" } },
                 },
@@ -290,12 +309,16 @@ async function renderizarGraficaFechas() {
 }
 
 async function actualizarTodo() {
-    await Promise.all([
-        cargarProductos(),
-        cargarKPIs(),
-        renderizarGraficaProductos(),
-        renderizarGraficaFechas(),
-    ]);
+    if (actualizando) return;
+    actualizando = true;
+    try {
+        await cargarProductos();
+        await cargarKPIs();
+        await renderizarGraficaProductos();
+        await renderizarGraficaFechas();
+    } finally {
+        actualizando = false;
+    }
 }
 
 // Inicialización
